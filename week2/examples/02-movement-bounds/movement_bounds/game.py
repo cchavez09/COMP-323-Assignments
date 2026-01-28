@@ -14,7 +14,8 @@ class BoundaryMode(str, Enum):
 @dataclass
 class Goal:
     pos: pygame.Vector2
-    radius: int = 16
+    # altered radius for moments where goal is hard to see in teleporter barrier
+    radius: int = 22
 
 @dataclass
 class Teleporter:
@@ -51,7 +52,8 @@ class Game:
             self.SCREEN_H - self.HUD_H - 2 * self.PLAYFIELD_PADDING,
         )
 
-        self.boundary_mode = BoundaryMode.CLAMP
+        # Set initial game boundary to Wrap instead of Clamp
+        self.boundary_mode = BoundaryMode.WRAP
         self.platformer_mode = False
         self.level = 1
         self.state = "title"  # title | play | win | lose
@@ -66,7 +68,11 @@ class Game:
         self.time_left = self.TIMER_SECONDS
 
         self.goal = Goal(pos=pygame.Vector2(0, 0))
-        self.teleporter = Teleporter(rect=pygame.Rect(0, 0, 40, 40))
+        self.teleporters = [Teleporter(rect=pygame.Rect(0, 0, 40, 40)), 
+                            Teleporter(rect=pygame.Rect(0, 0, 40, 40))]
+
+        # Created level up variable to alter time for every 5 levels
+        self.level_up = 5
 
         self._reset_level(keep_state=True)
 
@@ -76,16 +82,32 @@ class Game:
         return pygame.Vector2(x, y)
 
     def _reset_level(self, keep_state: bool = False) -> None:
-        self.player_pos = pygame.Vector2(self.playfield.center)
+        
+        self.player_pos = pygame.Vector2(0, 0)
         self.player_vel = pygame.Vector2(0, 0)
         self.player_rect.center = self.player_pos
         self.on_ground = True
         self.jump_requested = False
 
-        self.goal.pos = self._random_point_in_playfield(margin=60)
-        tp_center = self._random_point_in_playfield(margin=70)
-        self.teleporter.rect.center = (int(tp_center.x), int(tp_center.y))
 
+        # Generate x & y for teleporter center and player start pos
+        tp_center = self._random_point_in_playfield(margin=70)
+        self_pos = self._random_point_in_playfield(margin=80)
+        goal_pos = self._random_point_in_playfield(margin=80)
+
+
+            
+        # Player starts offset from the teleporter
+        # Made teleporters 30 in width/height to make them more visible in comparison with goal
+        self.player_pos = pygame.Vector2(self_pos, self_pos.y)
+        self.teleporters = [Teleporter(rect=pygame.Rect(tp_center.x, self.playfield.top, 30, self.playfield.height)),
+                           Teleporter(rect=pygame.Rect(self.playfield.left, tp_center.y, self.playfield.width, 30))]
+        
+        # Goal is randomly placed on side of teleporter opposite the player
+        self.goal.pos = pygame.Vector2(goal_pos.x, goal_pos.y)
+
+        
+        
         self.time_left = self.TIMER_SECONDS
 
         if not keep_state:
@@ -287,14 +309,23 @@ class Game:
             self._apply_bounds_player()
 
         # Teleporter: collision changes decision (risk/reward positional change).
-        if self.player_rect.colliderect(self.teleporter.rect):
-            new_pos = self._random_point_in_playfield(margin=80)
-            self.player_pos.update(new_pos)
-            self.player_rect.center = (int(new_pos.x), int(new_pos.y))
+        # Created for loop to iterate through teleporters since I wanted two teleporters for the game
+        for tp in self.teleporters:
+            if self.player_rect.colliderect(tp.rect):
+                new_pos = self._random_point_in_playfield(margin=80)
+                self.player_pos.update(new_pos)
+                self.player_rect.center = (int(new_pos.x), int(new_pos.y))
 
         if self._player_reaches_goal():
             self.level += 1
             self.state = "win"
+
+        # Decrease timer every 5 levels until timer reaches 5 seconds minimum
+        if self.level >= self.level_up:
+            if self.TIMER_SECONDS > 5:
+                self.TIMER_SECONDS -= 5
+                self.level_up += 5
+            
 
     def _draw_hud(self) -> None:
         pygame.draw.rect(self.screen, (46, 52, 64), pygame.Rect(0, 0, self.SCREEN_W, self.HUD_H))
@@ -345,7 +376,9 @@ class Game:
         )
 
         # Teleporter
-        pygame.draw.rect(self.screen, (180, 142, 173), self.teleporter.rect, border_radius=6)
+        # Drawing the teleporters in a loop to match the update method changes
+        for tp in self.teleporters:
+            pygame.draw.rect(self.screen, (180, 142, 173),  tp.rect, border_radius=6)
 
         # Player
         pygame.draw.rect(self.screen, (136, 192, 208), self.player_rect, border_radius=6)

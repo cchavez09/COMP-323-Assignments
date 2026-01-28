@@ -27,3 +27,16 @@ From this folder:
 - `PLAYFIELD_PADDING`, `PLAYER_MAX_SPEED`, `TIMER_SECONDS`
 - Try swapping boundary mode defaults
 - Try making the teleporter a hazard instead
+
+## Assignment 2 What I added
+- I made the original teleporter to be the height of the playfield. I then wanted to add a second teleporter as a "barrier" 
+so I had to modify the teleporter to be a list and modify the code that interacted with teleporter to iterate as a list rather 
+than a singular object. 
+
+## Log
+- Altered Radius of goal
+- Made the teleporter barries thinner to anticipate overlap of goal and teleporter
+- Created 2 teleporter barries in list
+- Iterated through these teleporters in necessary locations
+- Every 5 levels decrease timer by 5 seconds until 5 seconds is reached where it'll stay the same until game is over
+- Starting mode is Wrap since 
