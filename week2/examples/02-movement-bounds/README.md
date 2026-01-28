@@ -39,4 +39,8 @@ than a singular object.
 - Created 2 teleporter barries in list
 - Iterated through these teleporters in necessary locations
 - Every 5 levels decrease timer by 5 seconds until 5 seconds is reached where it'll stay the same until game is over
-- Starting mode is Wrap since 
+- Starting mode is Wrap since that is focus of the game
+- 2 teleporters acting as barrier forces players to use wrap feature to get around the playfield
+- Player learns how to use the wrap feature to get around 
+- Timer decreasing every 5 levels allows player to be quick with their decision making
+- Lower timer creates anxious decisions making the player needing to be precise with their movements using wrap
