@@ -26,9 +26,21 @@ From this folder:
 - `R`: reset
 - `Space`: start (from title)
 - `Esc`: quit
+- `Space`: shoot (in game)
 
 ## What to change first
 - Try editing preset values in `input_control_feel/game.py`:
   - accel / friction / max speed
   - gravity / jump speed
 - Try changing dash cooldown or dash impulse
+
+# What I added/Altered
+- Altered all three presets shown in TuningNotes.txt
+- Altered _scheme_keys with defined actions.
+- Created _try_shoot with new action for bullet mechanism
+- Created restraint where bullet can only be shot if bullet 
+  hasn't been shot/hasn't left the playing field
+- Added event key for function _try_shoot using Space
+- Removed it from platform jump
+- Added bullet counter to HUD 
+- Constraint of 3 bullets on the screen at a time

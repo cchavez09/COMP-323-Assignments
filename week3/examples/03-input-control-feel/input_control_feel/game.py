@@ -41,8 +41,14 @@ class Game:
 
     PLAYER_SIZE = 32
 
-    DASH_IMPULSE = 760.0
+    DASH_IMPULSE = 1500.0
     DASH_COOLDOWN = 0.65
+
+    # Created constant for shoot speed for bullet implementation
+    SHOOT_SPEED = 350.0
+
+    # Max Bullet Count
+    MAX_BULLETS = 3
 
     def __init__(self) -> None:
         self.screen = pygame.display.set_mode((self.SCREEN_W, self.SCREEN_H))
@@ -77,22 +83,25 @@ class Game:
                 name="tight",
                 accel=3200.0,
                 max_speed=520.0,
-                friction=14.0,
+                # Altered Friction
+                friction=23.0,
                 gravity=2600.0,
                 jump_speed=860.0,
             ),
             FeelPreset(
                 name="floaty",
                 accel=1900.0,
-                max_speed=560.0,
+                # Altered Max Speed
+                max_speed=620.0,
                 friction=6.0,
                 gravity=1700.0,
                 jump_speed=760.0,
             ),
             FeelPreset(
                 name="heavy",
-                accel=1400.0,
-                max_speed=440.0,
+                # Altered Accel and Max Speed
+                accel=1300.0,
+                max_speed=500.0,
                 friction=4.2,
                 gravity=3200.0,
                 jump_speed=820.0,
@@ -102,6 +111,9 @@ class Game:
 
         self.dash_cooldown_left = 0.0
         self.last_move_dir = pygame.Vector2(1, 0)
+
+        # Created bullet list for bullets to be added when shot and tracked
+        self.bullets = []
 
     @property
     def preset(self) -> FeelPreset:
@@ -181,30 +193,37 @@ class Game:
         if event.key in {pygame.K_LSHIFT, pygame.K_RSHIFT}:
             self._try_dash()
             return
+        
+        # Shooting action with Space key
+        if event.key == pygame.K_SPACE:
+            self._try_shoot()
+            return
 
-        if self.platformer_mode and event.key in {pygame.K_UP, pygame.K_w, pygame.K_SPACE}:
+        # Removed Space jump for platformer mode to avoid conflict with shooting
+        if self.platformer_mode and event.key in {pygame.K_UP, pygame.K_w}:
             self.jump_requested = True
 
     def _scheme_keys(self) -> dict[str, set[int]]:
+        # Mapping already set to avoid hard coding single key to an action
         if self.control_scheme == ControlScheme.WASD:
             return {
-                "left": {pygame.K_a},
-                "right": {pygame.K_d},
-                "up": {pygame.K_w},
-                "down": {pygame.K_s},
+                "MOVE_LEFT": {pygame.K_a},
+                "MOVE_RIGHT": {pygame.K_d},
+                "MOVE_UP": {pygame.K_w},
+                "MOVE_DOWN": {pygame.K_s},
             }
         if self.control_scheme == ControlScheme.IJKL:
             return {
-                "left": {pygame.K_j},
-                "right": {pygame.K_l},
-                "up": {pygame.K_i},
-                "down": {pygame.K_k},
+                "MOVE_LEFT": {pygame.K_j},
+                "MOVE_RIGHT": {pygame.K_l},
+                "MOVE_UP": {pygame.K_i},
+                "MOVE_DOWN": {pygame.K_k},
             }
         return {
-            "left": {pygame.K_LEFT},
-            "right": {pygame.K_RIGHT},
-            "up": {pygame.K_UP},
-            "down": {pygame.K_DOWN},
+            "MOVE_LEFT": {pygame.K_LEFT},
+            "MOVE_RIGHT": {pygame.K_RIGHT},
+            "MOVE_UP": {pygame.K_UP},
+            "MOVE_DOWN": {pygame.K_DOWN},
         }
 
     def _read_direction(self) -> pygame.Vector2:
@@ -214,13 +233,14 @@ class Game:
         x = 0
         y = 0
 
-        if any(keys[k] for k in mapping["left"]):
+        # Altered description like left to MOVE_LEFT for clarity
+        if any(keys[k] for k in mapping["MOVE_LEFT"]):
             x -= 1
-        if any(keys[k] for k in mapping["right"]):
+        if any(keys[k] for k in mapping["MOVE_RIGHT"]):
             x += 1
-        if any(keys[k] for k in mapping["up"]):
+        if any(keys[k] for k in mapping["MOVE_UP"]):
             y -= 1
-        if any(keys[k] for k in mapping["down"]):
+        if any(keys[k] for k in mapping["MOVE_DOWN"]):
             y += 1
 
         direction = pygame.Vector2(x, y)
@@ -253,9 +273,9 @@ class Game:
         mapping = self._scheme_keys()
 
         x = 0
-        if any(keys[k] for k in mapping["left"]) or keys[pygame.K_LEFT]:
+        if any(keys[k] for k in mapping["MOVE_LEFT"]) or keys[pygame.K_LEFT]:
             x -= 1
-        if any(keys[k] for k in mapping["right"]) or keys[pygame.K_RIGHT]:
+        if any(keys[k] for k in mapping["MOVE_RIGHT"]) or keys[pygame.K_RIGHT]:
             x += 1
 
         if x != 0:
@@ -334,12 +354,29 @@ class Game:
         self.player_vel += dash_dir * self.DASH_IMPULSE
         self.dash_cooldown_left = self.DASH_COOLDOWN
 
+    def _try_shoot(self) -> None:
+        # Create condition to only allow three bullet at a time
+        if len(self.bullets) >= self.MAX_BULLETS:
+            return
+        
+        # Create a bullet instance at the player's current position and add it to bullet list
+        player_top_center = self.player_rect.midtop
+        bullet_rect = pygame.Rect(player_top_center[0], player_top_center[1], 5, 5)
+        self.bullets.append(bullet_rect)
+
     def update(self, dt: float) -> None:
         if self.state != "play":
             return
 
         if self.dash_cooldown_left > 0:
             self.dash_cooldown_left = max(0.0, self.dash_cooldown_left - dt)
+
+        # Update the bullet instance positions for each bullet within the bullet list
+        # Remove bullets that have left the playfield
+        if  len(self.bullets) > 0:
+            for bullet in self.bullets:
+                bullet.y += -self.SHOOT_SPEED * dt
+            self.bullets = [bullet for bullet in self.bullets if bullet.top > 0]
 
         p = self.preset
 
@@ -402,6 +439,11 @@ class Game:
         dash = "READY" if self.dash_cooldown_left <= 0 else f"CD {self.dash_cooldown_left:0.2f}s"
         right = f"Dash: {dash}"
 
+        # Added bullet count to HUD display
+        bullets_used = len(self.bullets)
+        bullets_left = self.MAX_BULLETS - bullets_used
+        right += f"    Bullets: {bullets_left}"
+
         left_surf = self.font.render(left, True, (216, 222, 233))
         right_surf = self.font.render(right, True, (216, 222, 233))
 
@@ -453,6 +495,10 @@ class Game:
         # Player
         pygame.draw.rect(self.screen, (136, 192, 208), self.player_rect, border_radius=6)
 
+        # Bullet drawing for each bullet in bullet list
+        for bullet in self.bullets:
+            pygame.draw.rect(self.screen, (255, 49, 49), bullet)
+
         self._draw_hud()
 
         if self.debug:
@@ -461,5 +507,5 @@ class Game:
         if self.state == "title":
             self._draw_center_message(
                 "Week 3",
-                "Space: start   Shift: dash   1/2/3: feel   C: scheme   P: mode   F1: debug",
+                "Space: start & shoot (in-game)   Shift: dash   1/2/3: feel   C: scheme   P: mode   F1: debug",
             )

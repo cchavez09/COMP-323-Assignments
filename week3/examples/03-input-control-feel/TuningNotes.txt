@@ -1,0 +1,11 @@
+Tuning Notes
+- Altered Tight feel preset friction: 19 -> 23
+- Player comes to a stop/change direction much faster.
+- Altered Floaty feel preset max speed: 560 -> 620
+- The change in max speed makes it where the player takes longer to switch directions, creates a more floaty sensation.
+- Altered Heavy feel preset max speed: 440 -> 500 | acceleration: 1400 -> 1300
+- Now feels even heavier since max speed takes longer to get to with lower acceleration
+- Change in direction is slower but not like floaty where accel + max speed is higher. 
+- DASH_IMPULSE altered: 760 -> 1500
+- When changing direction and using dash, max speed is reached faster especially in tight.
+- When using tight + platformer, dash is noticed to be a lot shorter.
