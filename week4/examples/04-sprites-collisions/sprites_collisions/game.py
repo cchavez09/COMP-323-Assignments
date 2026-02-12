@@ -15,9 +15,11 @@ class Palette:
     subtle: pygame.Color = field(default_factory=lambda: pygame.Color("#a3adbf"))
 
     player: pygame.Color = field(default_factory=lambda: pygame.Color("#88c0d0"))
-    coin: pygame.Color = field(default_factory=lambda: pygame.Color("#ebcb8b"))
+    coin: pygame.Color = field(default_factory=lambda: pygame.Color("#ecd19b"))
     hazard: pygame.Color = field(default_factory=lambda: pygame.Color("#bf616a"))
     wall: pygame.Color = field(default_factory=lambda: pygame.Color("#4c566a"))
+    # Added star color to palette
+    star: pygame.Color = field(default_factory=lambda: pygame.Color("#f8d300"))
 
 
 def _clamp(value: float, lo: float, hi: float) -> float:
@@ -47,6 +49,23 @@ class Coin(pygame.sprite.Sprite):
         self.visual_size = visual_size
         self.color = color
 
+# Added Power up that changes game state to invicibility and speed boost
+# for a short period of time.
+class Star(pygame.sprite.Sprite):
+    def __init__(
+        self,
+        center: tuple[int, int],
+        *,
+        hitbox_size: int = 24,
+        visual_size: int = 36,
+        color: pygame.Color,
+    ) -> None:
+        super().__init__()
+        self.rect = pygame.Rect(0, 0, hitbox_size, hitbox_size)
+        self.rect.center = center
+
+        self.visual_size = visual_size
+        self.color = color
 
 class Hazard(pygame.sprite.Sprite):
     def __init__(
@@ -56,6 +75,8 @@ class Hazard(pygame.sprite.Sprite):
         size: int = 28,
         color: pygame.Color,
         patrol_dx: int = 140,
+        patrol_dy: int = 140,
+        patrol_direction = "horizontal",
         speed: float = 180.0,
     ) -> None:
         super().__init__()
@@ -65,20 +86,33 @@ class Hazard(pygame.sprite.Sprite):
 
         self.home = pygame.Vector2(center)
         self.patrol_dx = patrol_dx
+        self.patrol_dy = patrol_dy
+        self.patrol_direction = patrol_direction
         self.speed = speed
 
         self.direction = 1
 
     def update(self, dt: float) -> None:
         x = self.rect.centerx + self.direction * self.speed * dt
-        if x < self.home.x - self.patrol_dx:
-            x = self.home.x - self.patrol_dx
-            self.direction = 1
-        elif x > self.home.x + self.patrol_dx:
-            x = self.home.x + self.patrol_dx
-            self.direction = -1
 
-        self.rect.centerx = int(x)
+        # Created a vertical patrol hazard
+        y = self.rect.centery + self.direction * self.speed * dt
+        if self.patrol_direction == "vertical":
+            if y < self.home.y - self.patrol_dy:
+                y = self.home.y - self.patrol_dy
+                self.direction = 1
+            elif y > self.home.y + self.patrol_dy:
+                y = self.home.y + self.patrol_dy
+                self.direction = -1
+            self.rect.centery = int(y)
+        else: 
+            if x < self.home.x - self.patrol_dx:
+                x = self.home.x - self.patrol_dx
+                self.direction = 1
+            elif x > self.home.x + self.patrol_dx:
+                x = self.home.x + self.patrol_dx
+                self.direction = -1
+            self.rect.centerx = int(x)
 
 
 class Player(pygame.sprite.Sprite):
@@ -86,7 +120,7 @@ class Player(pygame.sprite.Sprite):
         self,
         center: tuple[int, int],
         *,
-        hitbox_size: int = 28,
+        hitbox_size: int = 25,
         visual_size: int = 38,
         color: pygame.Color,
     ) -> None:
@@ -98,12 +132,15 @@ class Player(pygame.sprite.Sprite):
         self.color = color
 
         self.vel = pygame.Vector2(0, 0)
-        self.speed = 320.0
+        self.speed = 300.0
 
         self.hp = 3
         self.invincible_for = 0.0
 
-        self.score = 0
+        # Commented out score from player class so score can be tracked in game class
+        # allowing easier reset of score and increase of score even after all 8 coins
+        # have been collected
+        # self.score = 0
 
     @property
     def is_invincible(self) -> bool:
@@ -139,9 +176,13 @@ class Game:
         self.walls: pygame.sprite.Group[Wall] = pygame.sprite.Group()
         self.coins: pygame.sprite.Group[Coin] = pygame.sprite.Group()
         self.hazards: pygame.sprite.Group[Hazard] = pygame.sprite.Group()
+        # Added group for star powerup
+        self.star: pygame.sprite.Group[Star] = pygame.sprite.Group()
 
         self.player = Player(self.playfield.center, color=self.palette.player)
         self.all_sprites.add(self.player)
+
+        self.score = 0
 
         self._shake = 0.0
         self._reset_level(keep_state=True)
@@ -151,6 +192,8 @@ class Game:
         self.walls.empty()
         self.coins.empty()
         self.hazards.empty()
+        # Reset star group
+        self.star.empty()
 
         self.player = Player(self.playfield.center, color=self.palette.player)
         self.all_sprites.add(self.player)
@@ -171,6 +214,10 @@ class Game:
         add_wall(pygame.Rect(self.playfield.left + 120, self.playfield.top + 90, 18, 280))
         add_wall(pygame.Rect(self.playfield.left + 380, self.playfield.top + 40, 18, 240))
         add_wall(pygame.Rect(self.playfield.left + 540, self.playfield.top + 220, 240, 18))
+        # Added 2 more walls
+        add_wall(pygame.Rect(self.playfield.left + 570, self.playfield.top + 100, 240, 18))
+        add_wall(pygame.Rect(self.playfield.left + 600, self.playfield.top + 350, 240, 18))
+        
 
         # Hazards (damage)
         h1 = Hazard((self.playfield.centerx + 180, self.playfield.centery - 80), color=self.palette.hazard)
@@ -180,11 +227,20 @@ class Game:
             patrol_dx=110,
             speed=220.0,
         )
-        self.hazards.add(h1, h2)
-        self.all_sprites.add(h1, h2)
+
+        # Added a third hazard that moves vertically
+        h3 = Hazard(
+            (self.playfield.centerx - 180, self.playfield.centery - 80),
+            color=self.palette.hazard,
+            patrol_direction = "vertical",
+            patrol_dy = 90,
+        )
+        self.hazards.add(h1, h2, h3)
+        self.all_sprites.add(h1, h2, h3)
 
         # Coins (trigger)
-        rng = random.Random(4)
+        # Removed 4 from Random for true random coin positions
+        rng = random.Random()
         for _ in range(8):
             for __ in range(100):
                 x = rng.randint(self.playfield.left + 40, self.playfield.right - 40)
@@ -201,6 +257,22 @@ class Game:
                 self.coins.add(candidate)
                 self.all_sprites.add(candidate)
                 break
+        
+        # Implementation of Star powerup
+        while True:
+            x = rng.randint(self.playfield.left + 40, self.playfield.right - 40)
+            y = rng.randint(self.playfield.top + 40, self.playfield.bottom - 40)
+            star = Star((x, y), color=self.palette.star)
+            if pygame.sprite.spritecollideany(star, self.walls):
+                continue
+            if pygame.sprite.spritecollideany(star, self.coins):
+                continue
+            if star.rect.colliderect(self.player.rect):
+                continue
+
+            self.star.add(star)
+            self.all_sprites.add(star)
+            break
 
         if not keep_state:
             self.state = "play"
@@ -219,11 +291,15 @@ class Game:
 
         if event.key == pygame.K_r:
             self._reset_level(keep_state=(self.state == "title"))
+            # Reset score on manual reset
+            self.score = 0
             return
 
         if self.state in {"title", "gameover"} and event.key == pygame.K_SPACE:
             self._reset_level(keep_state=True)
             self.state = "play"
+            # Reset score when starting new game from title or gameover
+            self.score = 0
 
     def _read_move(self) -> pygame.Vector2:
         keys = pygame.key.get_pressed()
@@ -273,6 +349,10 @@ class Game:
 
         self.player.hp -= 1
         self.player.invincible_for = 0.85
+        # Added sound effect to indicate damage
+        # Sound effect was created from my own mouse
+        damage_sound = pygame.mixer.Sound("sprites_collisions/sound_effects/Damage_A4.wav")
+        damage_sound.play()
 
         push = pygame.Vector2(self.player.rect.center) - pygame.Vector2(source_rect.center)
         if push.length_squared() == 0:
@@ -302,7 +382,7 @@ class Game:
         # Triggers: coin pickup
         picked = pygame.sprite.spritecollide(self.player, self.coins, dokill=True)
         if picked:
-            self.player.score += len(picked)
+            self.score += 1
 
         # Hazards: damage + response
         for hz in pygame.sprite.spritecollide(self.player, self.hazards, dokill=False):
@@ -310,8 +390,19 @@ class Game:
 
         self.hazards.update(dt)
 
+        # Star powerup: invincibility + speed boost
+        star_picked = pygame.sprite.spritecollide(self.player, self.star, dokill=True)
+        if star_picked:
+            self.player.invincible_for = 3.0
+            self.player.speed = 440.0
+
         if self.player.invincible_for > 0:
             self.player.invincible_for = max(0.0, self.player.invincible_for - dt)
+        
+        # Speed is normalized when not invincible state to prevent
+        # speed boost from star being permanent
+        if self.player.invincible_for == 0:
+            self.player.speed = 300.0
 
         if len(self.coins) == 0:
             # Quick win condition: respawn coins + hazards to keep playing
@@ -340,9 +431,10 @@ class Game:
             1,
         )
 
-        hud = f"Score: {self.player.score}    HP: {self.player.hp}"
+        hud = f"Score: {self.score}    HP: {self.player.hp}"
         if self.player.is_invincible:
             hud += "    i-frames"
+            hud += f" ({self.player.invincible_for:.1f}s)"
 
         self.screen.blit(self.font.render(hud, True, self.palette.text), (14, 18))
         self.screen.blit(
@@ -369,6 +461,25 @@ class Game:
             pts = [(r.centerx, r.top), (r.right, r.bottom), (r.left, r.bottom)]
             pygame.draw.polygon(self.screen, hazard.color, pts)
             pygame.draw.polygon(self.screen, pygame.Color("#000000"), pts, 2)
+
+        # Draw Star powerup
+        for star in self.star:
+            visual = pygame.Rect(0, 0, star.visual_size, star.visual_size)
+            visual.center = star.rect.center
+            pts = [
+                (visual.centerx, visual.top),
+                (visual.centerx + visual.width * 0.2, visual.centery - visual.height * 0.15),
+                (visual.right, visual.centery - visual.height * 0.15),
+                (visual.centerx + visual.width * 0.25, visual.centery + visual.height * 0.15),
+                (visual.centerx + visual.width * 0.35, visual.bottom),
+                (visual.centerx, visual.centery + visual.height * 0.25),
+                (visual.centerx - visual.width * 0.35, visual.bottom),
+                (visual.centerx - visual.width * 0.25, visual.centery + visual.height * 0.15),
+                (visual.left, visual.centery - visual.height * 0.15),
+                (visual.centerx - visual.width * 0.2, visual.centery - visual.height * 0.15),
+            ]
+            pygame.draw.polygon(self.screen, star.color, pts)
+            pygame.draw.polygon(self.screen, pygame.Color("#000000"), pts, 3)
 
         # Draw player (bigger art than hitbox)
         pr = self.player.rect.move(cam)
@@ -397,7 +508,10 @@ class Game:
             pygame.draw.rect(self.screen, pygame.Color("#ebcb8b"), coin.rect.move(cam), 2)
         for hazard in self.hazards:
             pygame.draw.rect(self.screen, pygame.Color("#bf616a"), hazard.rect.move(cam), 2)
-
+            
+        # Star hitbox
+        for star in self.star:
+            pygame.draw.rect(self.screen, pygame.Color("#f5d20c"), star.rect.move(cam), 2)
         # Help text
         self.screen.blit(
             self.font.render("DEBUG: Rect hitboxes (collisions use these)", True, self.palette.text),
