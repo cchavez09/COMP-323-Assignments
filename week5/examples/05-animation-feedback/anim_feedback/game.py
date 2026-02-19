@@ -5,6 +5,8 @@ import random
 
 import pygame
 
+import os
+
 
 @dataclass(frozen=True)
 class Palette:
@@ -139,6 +141,9 @@ class Player(pygame.sprite.Sprite):
         self.hp = 3
         self.invincible_for = 0.0
 
+        # Added dead_time to create death animation 
+        self.dead_time = 0.0
+
         self.score = 0
 
         self.flash_for = 0.0
@@ -155,7 +160,13 @@ class Player(pygame.sprite.Sprite):
         self.anims[self.state].reset()
 
     def update(self, dt: float) -> None:
-        self.anims[self.state].update(dt)
+        # Added condition for dead state to play animation and freeze on last frame
+        if self.state == "dead":
+            self.dead_time += dt
+            if self.dead_time < 1:
+                self.anims["dead"].update(dt)
+        else:         
+            self.anims[self.state].update(dt)
         center = self.rect.center
         self.image = self.anims[self.state].image
         self.rect = self.image.get_rect(center=center)
@@ -196,6 +207,11 @@ class Game:
         self.cue_shake = True
         self.cue_hitstop = True
         self.cue_particles = True
+        # Added sound cue for hits
+        self.cue_hitsound = True
+
+        # Added death timer to allow animation to play out before showing game over screen
+        self.dead_time = 0.0
 
         self.rng = random.Random(5)
 
@@ -220,6 +236,9 @@ class Game:
         self.coins.empty()
         self.hazards.empty()
         self.particles.clear()
+
+        # Reset dead time whenever level is reset
+        self.dead_time = 0.0
 
         self.player = Player(self.playfield.center, color=self.palette.player)
         self.all_sprites.add(self.player)
@@ -295,6 +314,11 @@ class Game:
         if event.key == pygame.K_4:
             self.cue_particles = not self.cue_particles
             return
+        
+        # Added toggle for hit sound cue
+        if event.key == pygame.K_5:
+            self.cue_hitsound = not self.cue_hitsound
+            return
 
         if self.state in {"title", "gameover"} and event.key == pygame.K_SPACE:
             self._reset_level(keep_state=True)
@@ -305,15 +329,15 @@ class Game:
 
         x = 0
         y = 0
-
-        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-            x -= 1
-        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-            x += 1
-        if keys[pygame.K_UP] or keys[pygame.K_w]:
-            y -= 1
-        if keys[pygame.K_DOWN] or keys[pygame.K_s]:
-            y += 1
+        if self.player.state != "dead":
+            if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+                x -= 1
+            if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+                x += 1
+            if keys[pygame.K_UP] or keys[pygame.K_w]:
+                y -= 1
+            if keys[pygame.K_DOWN] or keys[pygame.K_s]:
+                y += 1
 
         v = pygame.Vector2(x, y)
         if v.length_squared() > 0:
@@ -362,11 +386,21 @@ class Game:
             self.particles.append(p)
 
     def _cue_coin(self, coin_rect: pygame.Rect) -> None:
-        if self.cue_shake:
-            self._shake_for = max(self._shake_for, 0.10)
+        # Removed shake cue for coin pickup as it felt too much for a positive event
+        # if self.cue_shake:
+        #    self._shake_for = max(self._shake_for, 0.10)
 
         if self.cue_particles:
             self._spawn_particles(coin_rect.center, color=self.palette.particle, count=18)
+
+    # Used os and pygame.mixer to add damage sound effect
+    def _cue_sound(self, sound_name: str) -> None:
+        game_dir = os.path.dirname(__file__)
+        assets_dir = os.path.join(game_dir, "assets")
+        sound_effects_dir = os.path.join(assets_dir, "sound_effects")
+        damage_path = os.path.join(sound_effects_dir, f"{sound_name}.wav")
+        damage_sound = pygame.mixer.Sound(damage_path)
+        damage_sound.play()
 
     def _cue_hit(self, source_rect: pygame.Rect) -> None:
         if self.cue_flash:
@@ -381,8 +415,12 @@ class Game:
         if self.cue_particles:
             self._spawn_particles(self.player.rect.center, color=self.palette.hazard, count=26)
 
+        if self.cue_hitsound:
+            self._cue_sound("A5_Damage")
+
     def _apply_damage(self, source_rect: pygame.Rect) -> None:
-        if self.player.is_invincible:
+        # added early return to avoid repeat hits while death animation is playing or while invincibility is active
+        if self.player.is_invincible or self.player.state == "dead":
             return
 
         self.player.hp -= 1
@@ -396,8 +434,9 @@ class Game:
 
         self._cue_hit(source_rect)
 
-        if self.player.hp <= 0:
-            self.state = "gameover"
+        # if self.player.hp <= 0:
+            #self.state = "gameover"
+        # removed gameover state to allow death animation to play out
 
     def update(self, dt: float) -> None:
         if self._shake_for > 0:
@@ -418,7 +457,11 @@ class Game:
         self.player.vel.update(move * self.player.speed)
 
         speed2 = self.player.vel.length_squared()
-        if self.player.is_invincible:
+        
+        # Added player state change for dead
+        if self.player.hp <= 0:
+            self.player.set_state("dead")
+        elif self.player.is_invincible:
             self.player.set_state("hurt")
         elif speed2 < 1.0:
             self.player.set_state("idle")
@@ -444,6 +487,15 @@ class Game:
             self._reset_level(keep_state=True)
             self.state = "play"
 
+        # If player is dead, keep track of time to allow animation to play out 
+        # before gameover state is triggered
+        # Added death sound after playthrough revision
+        if self.player.state == "dead":
+            self._cue_sound("A5_Death")
+            self.dead_time += dt
+            if self.dead_time >= 1:
+                self.state = "gameover"
+
     def _camera_offset(self) -> tuple[int, int]:
         if not self.cue_shake or self._shake_for <= 0:
             return (0, 0)
@@ -459,7 +511,8 @@ class Game:
         hud_rect = pygame.Rect(0, 0, self.SCREEN_W, self.HUD_H)
         pygame.draw.rect(self.screen, self.palette.panel, hud_rect)
 
-        cues = f"Cues: [1]flash={'on' if self.cue_flash else 'off'}  [2]shake={'on' if self.cue_shake else 'off'}  [3]hitstop={'on' if self.cue_hitstop else 'off'}  [4]particles={'on' if self.cue_particles else 'off'}"
+        # Added hitsound toggle to on-screen cues
+        cues = f"Cues: [1]flash={'on' if self.cue_flash else 'off'}  [2]shake={'on' if self.cue_shake else 'off'}  [3]hitstop={'on' if self.cue_hitstop else 'off'}  [4]particles={'on' if self.cue_particles else 'off'}  [5]hitsound={'on' if self.cue_hitsound else 'off'}"
         self._draw_text(f"HP {self.player.hp}   Score {self.player.score}", (12, 10), self.palette.text)
         self._draw_text(cues, (12, 32), self.palette.subtle)
 
@@ -501,7 +554,8 @@ class Game:
         if self.state == "title":
             self._draw_centered("Press Space to Start", y=self.playfield.centery, color=self.palette.text)
         elif self.state == "gameover":
-            self._draw_centered("Game Over — Press Space", y=self.playfield.centery, color=self.palette.text)
+            # Changed from Game Over to YOU DIED to match feedback
+            self._draw_centered("YOU DIED — Press Space", y=self.playfield.centery, color=self.palette.text)
 
     def _draw_text(self, text: str, pos: tuple[int, int], color: pygame.Color) -> None:
         s = self.font.render(text, True, color)
@@ -552,28 +606,38 @@ def _make_hazard_surface(size: int, color: pygame.Color) -> pygame.Surface:
 
 
 def _make_player_anims(color: pygame.Color) -> dict[str, Animation]:
-    idle = [_draw_player_frame(color, leg_phase=0, eye_open=True)]
+    idle = [_draw_player_frame(color, leg_phase=0, eye_open=True, player_dead=False)]
 
     run_frames = [
-        _draw_player_frame(color, leg_phase=0, eye_open=True),
-        _draw_player_frame(color, leg_phase=1, eye_open=True),
-        _draw_player_frame(color, leg_phase=2, eye_open=True),
-        _draw_player_frame(color, leg_phase=3, eye_open=True),
+        _draw_player_frame(color, leg_phase=0, eye_open=True, player_dead=False),
+        _draw_player_frame(color, leg_phase=1, eye_open=True, player_dead=False),
+        _draw_player_frame(color, leg_phase=2, eye_open=True, player_dead=False),
+        _draw_player_frame(color, leg_phase=3, eye_open=True, player_dead=False),
     ]
 
     hurt_frames = [
-        _draw_player_frame(pygame.Color("#d08770"), leg_phase=0, eye_open=False),
-        _draw_player_frame(pygame.Color("#bf616a"), leg_phase=2, eye_open=False),
+        _draw_player_frame(pygame.Color("#d08770"), leg_phase=0, eye_open=False, player_dead=False),
+        _draw_player_frame(pygame.Color("#bf616a"), leg_phase=2, eye_open=False, player_dead=False),
+    ]
+
+    dead_frames = [
+        pygame.transform.rotate(_draw_player_frame(color, leg_phase=0, eye_open=False, player_dead=True), -15),
+        pygame.transform.rotate(_draw_player_frame(color, leg_phase=0, eye_open=False, player_dead=True), -30),
+        pygame.transform.rotate(_draw_player_frame(color, leg_phase=0, eye_open=False, player_dead=True), -45),
+        pygame.transform.rotate(_draw_player_frame(color, leg_phase=0, eye_open=False, player_dead=True), -60),
+        pygame.transform.rotate(_draw_player_frame(color, leg_phase=0, eye_open=False, player_dead=True), -75),
+        pygame.transform.rotate(_draw_player_frame(color, leg_phase=0, eye_open=False, player_dead=True), -90),
     ]
 
     return {
         "idle": Animation(idle, fps=1.0),
         "run": Animation(run_frames, fps=10.0),
         "hurt": Animation(hurt_frames, fps=8.0),
+        "dead": Animation(dead_frames, fps=6.0),
     }
 
 
-def _draw_player_frame(color: pygame.Color, *, leg_phase: int, eye_open: bool) -> pygame.Surface:
+def _draw_player_frame(color: pygame.Color, *, leg_phase: int, eye_open: bool, player_dead: bool) -> pygame.Surface:
     w, h = 44, 44
     surf = pygame.Surface((w, h), pygame.SRCALPHA)
 
@@ -590,26 +654,39 @@ def _draw_player_frame(color: pygame.Color, *, leg_phase: int, eye_open: bool) -
 
     # Eyes
     eye = pygame.Color("#2e3440")
-    if eye_open:
-        pygame.draw.circle(surf, eye, (head_center[0] - 3, head_center[1] - 1), 2)
-        pygame.draw.circle(surf, eye, (head_center[0] + 3, head_center[1] - 1), 2)
-    else:
-        pygame.draw.line(surf, eye, (head_center[0] - 5, head_center[1] - 1), (head_center[0] - 1, head_center[1] - 1), 2)
-        pygame.draw.line(surf, eye, (head_center[0] + 1, head_center[1] - 1), (head_center[0] + 5, head_center[1] - 1), 2)
+    if player_dead:
+        eye = pygame.Color("#000000")
+        # Left eye
+        pygame.draw.line(surf, eye, (head_center[0] - 7, head_center[1] - 4), (head_center[0] - 2, head_center[1] + 2), 2)
+        pygame.draw.line(surf, eye, (head_center[0] - 7, head_center[1] + 2), (head_center[0] - 2, head_center[1] - 4), 2)
+
+        # Right eye
+        pygame.draw.line(surf, eye, (head_center[0] + 2, head_center[1] - 4), (head_center[0] + 7, head_center[1] + 2), 2)
+        pygame.draw.line(surf, eye, (head_center[0] + 2, head_center[1] + 2), (head_center[0] + 7, head_center[1] - 4), 2)
+    else: 
+        if eye_open:
+            pygame.draw.circle(surf, eye, (head_center[0] - 3, head_center[1] - 1), 2)
+            pygame.draw.circle(surf, eye, (head_center[0] + 3, head_center[1] - 1), 2)
+        else:
+            pygame.draw.line(surf, eye, (head_center[0] - 5, head_center[1] - 1), (head_center[0] - 1, head_center[1] - 1), 2)
+            pygame.draw.line(surf, eye, (head_center[0] + 1, head_center[1] - 1), (head_center[0] + 5, head_center[1] - 1), 2)
+
 
     # Legs (simple alternating phase)
-    leg_y = body.bottom + 2
+    # Removed - 2 from leg_y to connect the legs to the actual body of the player sprite
+    leg_y = body.bottom
     dx = 6
     phase = leg_phase % 4
     left_off = (-dx, 4) if phase in {0, 3} else (-dx, 1)
     right_off = (dx, 4) if phase in {1, 2} else (dx, 1)
 
-    pygame.draw.line(surf, pygame.Color("#2e3440"), (w // 2 - 6, leg_y), (w // 2 - 6 + left_off[0] // 3, leg_y + left_off[1]), 4)
-    pygame.draw.line(surf, pygame.Color("#2e3440"), (w // 2 + 6, leg_y), (w // 2 + 6 + right_off[0] // 3, leg_y + right_off[1]), 4)
+
+    pygame.draw.line(surf, pygame.Color("#000000"), (w // 2 - 6, leg_y), (w // 2 - 6 + left_off[0] // 3, leg_y + left_off[1]), 4)
+    pygame.draw.line(surf, pygame.Color("#000000"), (w // 2 + 6, leg_y), (w // 2 + 6 + right_off[0] // 3, leg_y + right_off[1]), 4)
 
     # Arms
     arm_y = body.top + 10
-    pygame.draw.line(surf, pygame.Color("#2e3440"), (body.left + 3, arm_y), (body.left - 6, arm_y + 3), 4)
-    pygame.draw.line(surf, pygame.Color("#2e3440"), (body.right - 3, arm_y), (body.right + 6, arm_y + 3), 4)
+    pygame.draw.line(surf, pygame.Color("#000000"), (body.left + 3, arm_y), (body.left - 6, arm_y + 3), 4)
+    pygame.draw.line(surf, pygame.Color("#000000"), (body.right - 3, arm_y), (body.right + 6, arm_y + 3), 4)
 
     return surf
