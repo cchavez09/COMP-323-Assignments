@@ -1,6 +1,6 @@
-# Week 8 Example — Audio + Moment-to-Moment Feedback
+# Week 10 Example — Audio + Moment-to-Moment Feedback
 
-This example supports the Week 8 slides as a compact scenes-based game with a centralized audio layer.
+This example supports the Week 10 slides as a compact scenes-based game with a centralized audio layer.
 
 ## Learning goals
 

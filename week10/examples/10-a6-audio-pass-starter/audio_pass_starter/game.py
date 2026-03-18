@@ -106,7 +106,7 @@ class TitleScene:
         screen = self.game.screen
         screen.fill(BG)
 
-        title = self.game.font(58).render("A8 Audio Pass Starter", True, TEXT)
+        title = self.game.font(58).render("A6 Audio Pass Starter", True, TEXT)
         body = self.game.font(28).render("Collect nodes, dodge hazards, scan on cooldown.", True, SUBTLE)
         note = self.game.font(24).render("Starter only: need to add more audio events.", True, ACCENT)
         hint = self.game.font(28).render("Press Space to start", True, TEXT)
@@ -281,7 +281,7 @@ class PlayScene:
         screen.blit(audio, audio.get_rect(midright=(self.game.hud_rect.right - 16, cy)))
 
         help_text = self.game.font(20).render("Move, collect nodes, and press Space to scan.", True, SUBTLE)
-        todo = self.banner if self.banner_for > 0.0 else "Starter app: extend this audio map for A8."
+        todo = self.banner if self.banner_for > 0.0 else "Starter app: extend this audio map for A6."
         todo_text = self.game.font(21).render(todo, True, ACCENT)
 
         screen.blit(help_text, help_text.get_rect(midtop=(self.game.playfield.centerx, self.game.playfield.top + 14)))

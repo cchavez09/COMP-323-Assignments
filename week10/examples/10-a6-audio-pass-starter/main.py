@@ -1,12 +1,11 @@
 import pygame
 
-from audio_feedback.game import Game
+from audio_pass_starter.game import Game
 
 
 def main() -> None:
-    pygame.mixer.pre_init(44100, -16, 2, 256)
     pygame.init()
-    pygame.display.set_caption("Week 8 Audio + Feedback (Pygame)")
+    pygame.display.set_caption("A6 Audio Pass Starter")
 
     game = Game()
     clock = pygame.time.Clock()

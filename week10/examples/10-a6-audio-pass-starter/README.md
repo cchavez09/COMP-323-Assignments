@@ -1,6 +1,6 @@
-# Week 8 Assignment Starter — A8 Audio Pass
+# Week 10 Assignment Starter — A6 Audio Pass
 
-This starter is meant to be a clean base for A8, not a finished submission.
+This starter is meant to be a clean base for A6, not a finished submission.
 
 It already includes:
 

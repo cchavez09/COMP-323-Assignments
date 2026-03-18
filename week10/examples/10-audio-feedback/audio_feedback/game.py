@@ -39,7 +39,7 @@ class TitleScene:
         pal = self.game.palette
         screen.fill(pal.bg)
 
-        title = self.game.font(54).render("Week 8: Audio + Feedback", True, pal.text)
+        title = self.game.font(54).render("Week 10: Audio + Feedback", True, pal.text)
         hint = self.game.font(28).render("Press Space to start", True, pal.subtle)
         mute = self.game.font(22).render(self.game.audio_status_text(), True, pal.accent)
         body = self.game.font(26).render("Audio should confirm action, danger, and state change.", True, pal.subtle)
