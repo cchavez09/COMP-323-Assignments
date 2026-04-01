@@ -7,6 +7,7 @@ import pygame
 import random
 import sys
 import os
+import game_config 
 
 # ---------------------------------------------------------------------------
 # Setup — notice the hardcoded values scattered through the code
@@ -41,8 +42,8 @@ class Player(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.centerx = WIN_WIDTH // 2
         self.rect.bottom = WIN_HEIGHT - 20
-        self.speed = 5           # TODO: move to config
-        self.health = 100        # TODO: move to config
+        self.speed = game_config.PLAYER_SPEED           # TODO: move to config
+        self.health = game_config.PLAYER_HEALTH        # TODO: move to config
         self.last_fired = 0
 
     def update(self):
@@ -57,7 +58,7 @@ class Player(pygame.sprite.Sprite):
 
     def fire(self, group, all_sprites):
         now = pygame.time.get_ticks()
-        if now - self.last_fired > 200:  # TODO: move cooldown to config
+        if now - self.last_fired > game_config.FIRE_COOLDOWN:  # TODO: move cooldown to config
             self.last_fired = now
             p = Projectile(self.rect.centerx, self.rect.top)
             group.add(p)
@@ -75,7 +76,7 @@ class Enemy(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.x = random.randrange(0, WIN_WIDTH - self.rect.width)
         self.rect.y = random.randrange(-80, -20)
-        self.speed_y = random.randrange(1, 7)  # TODO: move to config
+        self.speed_y = random.randrange(game_config.ENEMY_SPEED_MIN, game_config.ENEMY_SPEED_MAX)  # TODO: move to config
 
     def update(self):
         self.rect.y += self.speed_y
@@ -112,12 +113,17 @@ def main():
     all_sprites.add(player)
 
     last_spawn = pygame.time.get_ticks()
-    spawn_delay = 800  # TODO: move to config
+    # spawn_delay = game_config.SPAWN_DELAY  # TODO: move to config
+    # used game_config.SPAWN_DELAY directly in the loop instead of using a local variable 
+    # to adjust for change in spawn delay as difficulty increased
     score = 0
     running = True
 
     while running:
         clock.tick(FPS)
+
+        # Adjust difficulty based on score
+        game_config.difficulty(score)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -130,7 +136,7 @@ def main():
 
         # spawn enemies — no cap, no progressive difficulty
         now = pygame.time.get_ticks()
-        if now - last_spawn > spawn_delay:
+        if now - last_spawn > game_config.SPAWN_DELAY:
             last_spawn = now
             e = Enemy()
             enemies.add(e)
@@ -146,7 +152,7 @@ def main():
         # collision: enemies vs player
         damage_hits = pygame.sprite.spritecollide(player, enemies, True)
         for hit in damage_hits:
-            player.health -= 20  # TODO: move damage to config
+            player.health -= game_config.ENEMY_DAMAGE  # TODO: move damage to config
             if player.health <= 0:
                 running = False
 
